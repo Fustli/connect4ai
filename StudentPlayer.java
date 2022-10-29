@@ -1,84 +1,215 @@
-import javax.sql.rowset.spi.SyncProvider;
-import java.sql.Array;
-import java.sql.Struct;
 import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.Spliterator;
 
-public class StudentPlayer extends Player{
-
-    private LinkedList<Node> nextNode = new LinkedList<Node>();
-    private int alphaValue = 0;
-    private int betaValue = 0;
+public class StudentPlayer extends Player {
 
     class Node {
-        private int depth = 0;
-
-        int value;
-        Board board;
+        private int d = 0;
+        int v;
+        Board b;
         ArrayList<Node> children;
 
-        public Node(int value, Board board){
-            this.value = value;
-            this.board = new Board(board);
+        public Node(int value, Board board) {
+            this.v = value;
+            this.b = new Board(board);
+            this.children = new ArrayList<>();
+        }
+            private void buildTree (Board board,int depth){
+            if (board.gameEnded()) {
+                this.d = 6;
+                return;
+            }
+
+            depth++;
+            this.d = depth;
+            int lastPlayer = board.getLastPlayerIndex();
+
+            if (lastPlayer == 1)
+                lastPlayer = 2;
+            else
+                lastPlayer = 1;
+
+            if (depth < 7) {
+                for (var x : board.getValidSteps()) {
+                    Board tempBoard = new Board(board);
+                    tempBoard.step(lastPlayer, x);
+                    Node tempNode = new Node(lastPlayer, tempBoard);
+
+                    tempNode.buildTree(tempBoard, depth);
+                    children.add(tempNode);
+                }
+            }
+        }
+        private int miniMax(int alpha, int beta) {
+            if (d == 6)
+                return evaluate();
+
+            if (d % 2 == 0) {
+                v = Integer.MIN_VALUE;
+                for (Node child : children) {
+                    v = Math.max(v, child.miniMax(alpha, beta));
+                    alpha = Math.max(alpha, v);
+                    if (alpha <= beta)
+                        break;
+                }
+                return v;
+            }
+            else {
+                v = Integer.MAX_VALUE;
+                for (Node child : children) {
+                    v = Math.min(v, child.miniMax(alpha, beta));
+                    beta = Math.min(beta, v);
+                    if (alpha <= beta)
+                        break;
+                }
+                return v;
+            }
         }
 
-        private void buildTree(Board board, int lastPlayer, int depth){
-            depth++;
-            System.out.print(depth + " ");
-            if(depth < 6){
-                if(!(board.getWinner() == 1 || board.getWinner() == 2)){
-                    for (var x : board.getValidSteps()){
-                        Board tempBoard = new Board(board);
-                        tempBoard.step(lastPlayer, x);
-                        Node tempNode = new Node(lastPlayer, tempBoard);
+        private int evaluate() {
+            int value = 0;
 
-                        tempNode.buildTree(tempBoard, lastPlayer, depth);
+            if (b.gameEnded()) {
+                if (b.getWinner() == 1)
+                    value += 1000;
+                if(b.getWinner() == 2)
+                    value -= 1000;
+            }
 
-                        children = new ArrayList<Node>();
-                        children.add(tempNode);
+            value -= c3(2) * 100 + check2(2) * 2;
+            value += c3(1) * 100 + check2(1) * 2;
+
+            return value;
+        }
+
+        private boolean canMove(int row, int column) {
+            if ((row < 0) || (column < 0) || (row > 5) || (column > 6) && b.getState()[row][column] != 0 ) {
+                return false;
+            }
+            return true;
+        }
+
+        private int c3(int player) {
+            int times = 0;
+
+            //row
+            for (int i = 5; i >= 0; i--) {
+                for (int k = 0; k < 7; k++) {
+                    try {
+                        if (canMove(i, k + 3)) {
+                            if (b.getState()[i][k] == b.getState()[i][k + 1] && b.getState()[i][k] == b.getState()[i][k + 2]  && b.getState()[i][k] == player)
+                                times++;
+                        }
+                    }
+                    catch(ArrayIndexOutOfBoundsException e){
                     }
                 }
             }
-        }
-
-        private int miniMax(int alpha, int beta){
-            if (depth == 0)
-                return ;
-
-            if (depth % 2 == 0){
-                value = Integer.MIN_VALUE;
-                for (Node child : children){
-                    value = Math.max(value, child.miniMax(alpha, beta));
-                    alpha = Math.max(alpha, value);
-                    if(alpha <= beta)
-                        break;
+            //column
+            for (int i = 5; i >= 0; i--) {
+                for (int k = 0; k < 7; k++) {
+                    try {
+                        if (canMove(i - 3, k)) {
+                            if (b.getState()[i][k] == b.getState()[i - 1][k] && b.getState()[i][k] == b.getState()[i - 2][k] && b.getState()[i][k] == player) {
+                                times++;
+                            }
+                        }
+                    }
+                    catch(ArrayIndexOutOfBoundsException e){
+                    }
                 }
-
-                return value;
             }
-
-            else {
-                value = Integer.MAX_VALUE;
-                for (Node child : children){
-                    value = Math.min(value, child.miniMax(alpha, beta));
-                    beta = Math.min(beta, value);
-                    if(alpha <= beta)
-                        break;
+            //diagonal
+            for (int i = 0; i < 6; i++) {
+                for (int k = 0; k < 7; k++) {
+                    try {
+                        if (canMove(i + 3, k + 3)) {
+                            if (b.getState()[i][k] == b.getState()[i + 1][k + 1] && b.getState()[i][k] == b.getState()[i + 2][k + 2] && b.getState()[i][k] == player) {
+                                times++;
+                            }
+                        }
+                    }
+                    catch(ArrayIndexOutOfBoundsException e){
+                    }
                 }
-                return value;
             }
+            //diagonal * -1
+            for (int i = 0; i < 6; i++) {
+                for (int k = 0; k < 7; k++) {
+                    try {
+                        if (canMove(i - 3, k + 3)) {
+                            if (b.getState()[i][k] == b.getState()[i - 1][k + 1] && b.getState()[i][k] == b.getState()[i - 2][k + 2] && b.getState()[i][k] == player) {
+                                times++;
+                            }
+                        }
+                    }
+                    catch(ArrayIndexOutOfBoundsException e){
+                    }
+                }
+            }
+            return times;
         }
 
-        private int evaluateNode(){
-
-
-            return 0;
+        private int check2(int player){
+            int times = 0;
+            //row
+            for (int i = 5; i >= 0; i--) {
+                for (int k = 0; k < 7; k++) {
+                    try {
+                        if (canMove(i, k + 2)) {
+                            if (b.getState()[i][k] == b.getState()[i][k + 1] && b.getState()[i][k] == player) {
+                                times++;
+                            }
+                        }
+                    }
+                    catch(ArrayIndexOutOfBoundsException e){
+                    }
+                }
+            }
+            //column
+            for (int i = 5; i >= 0; i--) {
+                for (int k = 0; k < 7; k++) {
+                    try {
+                        if (canMove(i - 2, k)) {
+                            if (b.getState()[i][k] == b.getState()[i - 1][k] && b.getState()[i][k] == player) {
+                                times++;
+                            }
+                        }
+                    }
+                    catch(ArrayIndexOutOfBoundsException e){
+                    }
+                }
+            }
+            //diagonal
+            for (int i = 0; i < 6; i++) {
+                for (int k = 0; k < 7; k++) {
+                    try {
+                        if (canMove(i + 2, k + 2)) {
+                            if (b.getState()[i][k] == b.getState()[i + 1][k + 1] && b.getState()[i][k] == player) {
+                                times++;
+                            }
+                        }
+                    }
+                    catch(ArrayIndexOutOfBoundsException e){
+                    }
+                }
+            }
+            //digonal * -1
+            for (int i = 0; i < 6; i++) {
+                for (int k = 0; k < 7; k++) {
+                    try {
+                        if (canMove(i - 2, k + 2)) {
+                            if (b.getState()[i][k] == b.getState()[i - 1][k + 1] && b.getState()[i][k] == player) {
+                                times++;
+                            }
+                        }
+                    }
+                    catch(ArrayIndexOutOfBoundsException e){
+                    }
+                }
+            }
+            return times;
         }
-
     }
-
-
 
     public StudentPlayer(int playerIndex, int[] boardSize, int nToConnect) {
         super(playerIndex, boardSize, nToConnect);
@@ -86,12 +217,22 @@ public class StudentPlayer extends Player{
 
     @Override
     public int step(Board board) {
-        Node root;
+        int totalValue;
+        int alphaValue = Integer.MAX_VALUE;
+        int betaValue = Integer.MIN_VALUE;
 
-        root = new Node(0, board);
-        root.miniMax(alphaValue, betaValue);
+        Node root = new Node(0, board);
 
-        root.buildTree(board, board.getLastPlayerIndex(), 0);
+        root.buildTree(board, 0);
+
+        totalValue = root.miniMax(alphaValue, betaValue);
+
+        for (Node node : root.children) {
+            if (node.v == totalValue||node.b.gameEnded()) {
+
+                return node.b.getLastPlayerColumn();
+            }
+        }
         return 0;
     }
 }
